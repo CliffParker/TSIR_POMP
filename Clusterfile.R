@@ -213,45 +213,97 @@ stochStep <- Csnippet("
                       theta = rpois(m);
                       lambda = B*(S + Z)*pow(Tcases + theta,alpha);  // working great lambda was I
                       
-                      
-                      
+                      // In literature the approximation below was used for estimation, this isnt neccesary in pomp
                       //log(lambda) = log(B) + alpha * log(lambda) + (alpha * m )/ lambda + log(S + Z);
-                      I = rnbinom_mu( 1/I, lambda);                   
+
+                      I = rnbinom_mu( I, lambda);                   
                       ")
 
 
 
-rmeas <- Csnippet("cases = rpois(lambda/b1);")
-# the number of cases is the number of susceptibles by the rate of reporting 1/bi
-dmeas <- Csnippet("lik = dpois(cases,lambda/b1,give_log);")
+#A overdispersed binomial mesurement is used here.
+
+dmeas <- Csnippet("
+                  double psi = 0.116;
+                  double mn = I/b1;
+                  double v = mn*(1.0-1/b1+psi*psi*mn);
+                  double tol = 1.0e-18;
+                  if (cases > 0.0) {
+                  lik = pnorm(cases+0.5,mn,sqrt(v)+tol,1,0)-pnorm(cases-0.5,mn,sqrt(v)+tol,1,0)+tol;
+                  } else {
+                  lik = pnorm(cases+0.5,mn,sqrt(v)+tol,1,0)+tol;
+                  }
+                  ")
+
+rmeas <- Csnippet("
+                  double psi = 0.116;
+                  double mn = I/b1;
+                  double v = mn*(1.0-1/b1+psi*psi*mn);
+                  double tol = 1.0e-18;
+                  cases = rnorm(mn,sqrt(v)+tol);
+                  if (cases > 0.0) {
+                  cases = nearbyint(cases);
+                  } else {
+                  cases = 0.0;
+                  }
+                  ")
+
+
 
 ##############################################################################################################################################
-# pomp(London_cases,times="times",t0=1939,
-#      rprocess=discrete.time.sim(step.fun=stochStep,delta.t=1/26.01786),
-#      paramnames=c("m","B1","B2","B3","B4","B5","B6","B7","B8","B9","B10","B11",
-#                   "B12","B13","B14","B15","B16","B17","B18","B19","B20","B21",
-#                   "B22","B23","B24","B25","B26","I0","theta0","lambda0",
-#                   "alpha","S"),
-#      initializer=initlz,
-#      params = c(m=1, B1 = 2.695622e-06, B2 = 2.695622e-06, B3 = 2.695622e-06, B4 = 2.695622e-06, B5 = 2.695622e-06, B6 = 2.695622e-06, 
-#                 B7 = 2.695622e-06, B8 = 2.695622e-06, B9 = 2.695622e-06, B10 = 2.695622e-06,
-#                 B11 = 2.695622e-06, B12 = 2.695622e-06, B13 = 2.695622e-06, B14 = 2.695622e-06, B15 = 2.695622e-06, B16 = 2.695622e-06, 
-#                 B17 = 2.695622e-06, B18 = 2.695622e-06, B19 = 2.695622e-06, B20 =2.695622e-06,
-#                 B21 = 2.695622e-06, B22 = 2.695622e-06, B23 = 2.695622e-06, B24 = 2.695622e-06, B25 = 2.695622e-06, B26 = 2.695622e-06,
-#                 alpha = 1 , S = 481608, I0 = 10, lambda0 =40, theta0 =1),
-#      statenames=c("I","lambda","theta"),
-#      rmeasure = rmeas,
-#      dmeasure = dmeas,
-#      toEstimationScale = toEst,
-#      fromEstimationScale = fromEst,
-#      covar = Covar,
-#      tcovar= "time") -> TSIR
-# 
-# 
-# 
-# 
-# plot(simulate(TSIR))
-# simulate(TSIR, as=T)
+pomp(London_cases,times="times",t0=1944,
+     rprocess=discrete.time.sim(step.fun=stochStep,delta.t=1/26.01786),
+     paramnames=c("m","B1","B2","B3","B4","B5","B6","B7","B8","B9","B10","B11",
+                  "B12","B13","B14","B15","B16","B17","B18","B19","B20","B21",
+                  "B22","B23","B24","B25","B26","I0","theta0","lambda0",
+                  "alpha","S"),
+     initializer=initlz,
+     params = c(m=1, B1 = 2.695622e-06, B2 = 2.695622e-06, B3 = 2.695622e-06, B4 = 2.695622e-06, B5 = 2.695622e-06, B6 = 2.695622e-06,
+                B7 = 2.695622e-06, B8 = 2.695622e-06, B9 = 2.695622e-06, B10 = 2.695622e-06,
+                B11 = 2.695622e-06, B12 = 2.695622e-06, B13 = 2.695622e-06, B14 = 2.695622e-06, B15 = 2.695622e-06, B16 = 2.695622e-06,
+                B17 = 2.695622e-06, B18 = 2.695622e-06, B19 = 2.695622e-06, B20 =2.695622e-06,
+                B21 = 2.695622e-06, B22 = 2.695622e-06, B23 = 2.695622e-06, B24 = 2.695622e-06, B25 = 2.695622e-06, B26 = 2.695622e-06,
+                alpha = 1 , S = 481608, I0 = 10, lambda0 =40, theta0 =1),
+     statenames=c("I","lambda","theta"),
+     rmeasure = rmeas,
+     dmeasure = dmeas,
+     toEstimationScale = toEst,
+     fromEstimationScale = fromEst,
+     covar = Covar,
+     tcovar= "time") -> TSIR
+
+
+plot(simulate(TSIR))
+firstFit <- mif2(TSIR, Nmif = 150, Np = 1000, #10 was 10000
+                 rw.sd = rw.sd(
+                   m=0.03, alpha=0.03, S=0.03,
+                   B1 = .10, B2 = .10, B3 = .10, B4 = .10, B5 = .10, B6 = .10, B7 = .10, B8 = .10, B9 = .10, B10 = .10,
+                   B11 = .10, B12 = .10, B13 = .10, B14 = .10, B15 = .10, B16 = .10, B17 = .10, B18 = .10, B19 = .10, B20 = .10,
+                   B21 = .10, B22 = .10, B23 = .10, B24 = .10, B25 = .10, B26 = .10),
+                 transform = T,
+                 cooling.type = "geometric", cooling.fraction.50 = .05,
+                 tol = 1e-17, max.fail = Inf, verbose = getOption("verbose"))
+
+coef(TSIR)<-coef(firstFit)
+
+TSIR %>%
+  simulate(params=coef(firstFit),nsim=9,as.data.frame=TRUE,include.data=TRUE) %>%
+  ggplot(aes(x=time,y=cases,group=sim,color=(sim=="data")))+
+  guides(color=FALSE)+
+  geom_line()+facet_wrap(~sim,ncol=2)
+
+
+TSIR %>%
+  simulate(params=coef(firstFit),nsim=100,as.data.frame=TRUE,include.data=TRUE) %>%
+  subset(select=c(time,sim,cases)) %>%
+  mutate(data=sim=="data") %>%
+  ddply(~time+data,summarize,
+        p=c(0.05,0.5,0.95),q=quantile(cases,prob=p,names=FALSE)) %>%
+  mutate(p=mapvalues(p,from=c(0.05,0.5,0.95),to=c("lo","med","hi")),
+         data=mapvalues(data,from=c(TRUE,FALSE),to=c("data","simulation"))) %>%
+  dcast(time+data~p,value.var='q') %>%
+  ggplot(aes(x=time,y=med,color=data,fill=data,ymin=lo,ymax=hi))+
+  geom_ribbon(alpha=0.2)+ theme_bw() + ylab("cases") + ggtitle("TSIR cases with Data")
 
 
 ############################################################################################################################################
@@ -272,8 +324,9 @@ stew(file="MyStochTSIR_London_pomp_results.rda",{
     #######################################################################'
     #######################################################################'
     #######################################################################
+   
     get(paste0(name,"_cases")) %>%
-      pomp(times="times",t0=1943,
+      pomp(times="times",t0=1944,
            rprocess=discrete.time.sim(step.fun=stochStep,delta.t=1/26.01786),
            paramnames=c("m","B1","B2","B3","B4","B5","B6","B7","B8","B9","B10","B11",
                         "B12","B13","B14","B15","B16","B17","B18","B19","B20","B21",
@@ -285,7 +338,7 @@ stew(file="MyStochTSIR_London_pomp_results.rda",{
                       B11 = 2.695622e-06, B12 = 2.695622e-06, B13 = 2.695622e-06, B14 = 2.695622e-06, B15 = 2.695622e-06, B16 = 2.695622e-06, 
                       B17 = 2.695622e-06, B18 = 2.695622e-06, B19 = 2.695622e-06, B20 =2.695622e-06,
                       B21 = 2.695622e-06, B22 = 2.695622e-06, B23 = 2.695622e-06, B24 = 2.695622e-06, B25 = 2.695622e-06, B26 = 2.695622e-06,
-                      alpha = 1 , S = 481608, I0 = 10, lambda0 =40, theta0 =1),
+                      alpha = 0.99 , S = 481608, I0 = 10, lambda0 =40, theta0 =1),
            statenames=c("I","lambda","theta"),
            rmeasure = rmeas,
            dmeasure = dmeas,
@@ -296,29 +349,49 @@ stew(file="MyStochTSIR_London_pomp_results.rda",{
     
     ####################################################'
     ####################################################'
+    # m1 %>% 
+    #   simulate(params=coef(secondFit),nsim=9,as.data.frame=TRUE,include.data=TRUE) %>%
+    #   ggplot(aes(x=time,y=cases,group=sim,color=(sim=="data")))+
+    #   guides(color=FALSE)+
+    #   geom_line()+facet_wrap(~sim,ncol=2)
+    # 
+    # 
+    # m1 %>% 
+    #   simulate(params=coef(firstFit),nsim=100,as.data.frame=TRUE,include.data=TRUE) %>%
+    #   subset(select=c(time,sim,cases)) %>%
+    #   mutate(data=sim=="data") %>%
+    #   ddply(~time+data,summarize,
+    #         p=c(0.05,0.5,0.95),q=quantile(cases,prob=p,names=FALSE)) %>%
+    #   mutate(p=mapvalues(p,from=c(0.05,0.5,0.95),to=c("lo","med","hi")),
+    #          data=mapvalues(data,from=c(TRUE,FALSE),to=c("data","simulation"))) %>%
+    #   dcast(time+data~p,value.var='q') %>%
+    #   ggplot(aes(x=time,y=med,color=data,fill=data,ymin=lo,ymax=hi))+
+    #   geom_ribbon(alpha=0.2)+ theme_bw() + ylab("cases") + ggtitle("TSIR cases with Data")
+    # # 
+    ####################################################'
     
     #first fit with larger sd's of rw
-    # firstFit <- mif2(m1, Nmif = 50, Np = 2000, #10 was 10000
-    #                  rw.sd = rw.sd(
-    #                    m=0.03, alpha=0.03, S=0.03,
-    #                    B1 = .10, B2 = .10, B3 = .10, B4 = .10, B5 = .10, B6 = .10, B7 = .10, B8 = .10, B9 = .10, B10 = .10,
-    #                    B11 = .10, B12 = .10, B13 = .10, B14 = .10, B15 = .10, B16 = .10, B17 = .10, B18 = .10, B19 = .10, B20 = .10,
-    #                    B21 = .10, B22 = .10, B23 = .10, B24 = .10, B25 = .10, B26 = .10,
-    #                    I0=0.03, theta0=0.03, lambda0=0.03),
-    #                  transform = T,
-    #                  cooling.type = "geometric", cooling.fraction.50 = .05,
-    #                  tol = 1e-17, max.fail = Inf, verbose = getOption("verbose"))
-    # secondFit<-continue(firstFit, Nmif = 50, Np = 10000,
-    #                     rw.sd = rw.sd(
-    #                       m=0.5, 
-    #                       B1 = .10, B2 = .10, B3 = .10, B4 = .10, B5 = .10, B6 = .10, B7 = .10, B8 = .10, B9 = .10, B10 = .10,
-    #                       B11 = .10, B12 = .10, B13 = .10, B14 = .10, B15 = .10, B16 = .10, B17 = .10, B18 = .10, B19 = .10, B20 = .10,
-    #                       B21 = .10, B22 = .10, B23 = .10, B24 = .10, B25 = .10, B26 = .10,
-    #                       alpha=0.5, S=0.5, 
-    #                       I0=0.5, theta0=0.5, lambda0=0.5))
-    # 
+    firstFit <- mif2(m1, Nmif = 150, Np = 2000, #10 was 10000
+                     rw.sd = rw.sd(
+                       m=0.03, alpha=0.03, S=0.03,
+                       B1 = .10, B2 = .10, B3 = .10, B4 = .10, B5 = .10, B6 = .10, B7 = .10, B8 = .10, B9 = .10, B10 = .10,
+                       B11 = .10, B12 = .10, B13 = .10, B14 = .10, B15 = .10, B16 = .10, B17 = .10, B18 = .10, B19 = .10, B20 = .10,
+                       B21 = .10, B22 = .10, B23 = .10, B24 = .10, B25 = .10, B26 = .10,
+                       I0=0.03, theta0=0.03, lambda0=0.03),
+                     transform = T,
+                     cooling.type = "geometric", cooling.fraction.50 = .05,
+                     tol = 1e-17, max.fail = Inf, verbose = getOption("verbose"))
+    secondFit<-continue(firstFit, Nmif = 150, Np = 2000,
+                        rw.sd = rw.sd(
+                          m=0.5,
+                          B1 = .10, B2 = .10, B3 = .10, B4 = .10, B5 = .10, B6 = .10, B7 = .10, B8 = .10, B9 = .10, B10 = .10,
+                          B11 = .10, B12 = .10, B13 = .10, B14 = .10, B15 = .10, B16 = .10, B17 = .10, B18 = .10, B19 = .10, B20 = .10,
+                          B21 = .10, B22 = .10, B23 = .10, B24 = .10, B25 = .10, B26 = .10,
+                          alpha=0.5, S=0.5,
+                          I0=0.5, theta0=0.5, lambda0=0.5))
+
     
-     theta<-coef(m1) 
+     theta<-coef(m1)<-coef(secondFit)
     #Saving model
     assign(paste0(name,"_TSIR_Model"),m1)
     

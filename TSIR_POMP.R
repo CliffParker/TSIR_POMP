@@ -1,3 +1,12 @@
+"good"
+#Packages to install
+install.packages("pomp")
+install.packages("plyr")
+install.packages("reshape2")
+install.packages("magrittr")
+install.packages("foreach")
+install.packages("doParallel")
+install.packages("ggplot2")
 # Sat Mar 18 16:03:04 2017 ------------------------------
 # Create datasets of reported cases and biths and # later population
 # Use predict to expand on births #Might not be so neccesary
@@ -17,7 +26,7 @@ registerDoParallel()
 
 "creating City datasets"
 
-stew("TSIR_POMP_SRA_DATA",{
+stew("TSIR_SRA.rda",{
   
   Biweekly=function(Data){
     n=nrow(Data)/2
@@ -69,7 +78,7 @@ stew("TSIR_POMP_SRA_DATA",{
   
   
   
-  for (names in levels(measles$town)) {
+  for (names in c("London")) {
     tmp <- subset(measles, town == names)
     tmp %>% 
       dcast(date~"cases", fun.aggregate = sum) %>%
@@ -81,18 +90,26 @@ stew("TSIR_POMP_SRA_DATA",{
     ##################
     tmp1<- subset(demog, town == names)
     tmp1<-tmp1[,-1]
+    
     tmp1 %>% subset(year>=1944 & year<1964) %>% 
       summarize(
         time= tmp$time, 
         birthrate=(predict(smooth.spline(x=year,y=births),x=time)$y)/52
       ) -> covar
-    merge(tmp,covar, by = "time")->x
     
+    merge(tmp,covar, by = "time")->x
+    # !!!!Here
+    new =  subset(demog, (town == names )&(year == 1943) )
+    new<-new$births/26
+    new = rep(new,8)
+    # adding new to table
     NewData<- as.matrix(x)
     Fdat = Biweekly(NewData)# Biweekly data
-    Fdat.d = cbind(Fdat[-(1:8),2],Fdat[1:539,3]) # Adjusting for the  delay caused by maternal immunity
+    Fdat.d = cbind(Fdat[,2],c(new,Fdat[1:539,3])) # Adjusting for the  delay caused by maternal immunity
     Fdat1 = Cumulative(Fdat.d)
-    NewData1 = cbind(Time=seq(from = 1944, by = 0.03843514, length.out = 539),CIncidence=Fdat1[,1],CBirths=Fdat1[,2])
+    
+    #here
+    NewData1 = cbind(Time=seq(from = 1944 , by = 0.03843514, length.out = 547),CIncidence=Fdat1[,1],CBirths=Fdat1[,2])
     NewData2 = as.data.frame(NewData1)
     
     h = seq(.05,5,.005)
