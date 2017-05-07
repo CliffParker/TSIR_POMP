@@ -12,7 +12,7 @@ stopifnot(packageVersion("pomp")>="1.4.8")
 
 Biweekly=function(Data){
   n=nrow(Data)/2
-  m=ncol(Data) 
+  m=ncol(Data)
   mat = matrix( ,n,m)
   for (i in 0:n - 1 ){
     mat[i + 1,]= rep(0, m)
@@ -32,7 +32,7 @@ Cumulative = function(Data){
   for (i in 2:n){
     Dta[i,] = Dta[i-1,] + Data[i,]
   }
-  
+
   return(Dta)
 }
 
@@ -44,23 +44,23 @@ measles$town = factor(measles$town)
 "Creating Bi-weekly incidence data"
 for (names in c("London")) {
   tmp <- subset(measles, town == names)
-  tmp %>% 
+  tmp %>%
     dcast(date~"cases", fun.aggregate = sum) %>%
     mutate(year=as.integer(format(date,"%Y"))) %>%
     subset(year>=1944 & year<1965) %>%
     mutate(time=(julian(date,origin=as.Date("1944-01-01")))/365.25+1944) %>%
     subset(time>1944 & time<1965, select=c(time,cases)) -> tmp
-  
+
   ##################
-  
+
   NewData<- as.matrix(tmp)
   Fdat = Biweekly(NewData)# Biweekly data
   Fdat.d = cbind(Fdat[1:547,2]) # Adjusting for the  delay caused by maternal immunity
   NewData1 = cbind(times=seq(from = 1944, by = 1/26.01786, length.out = 547),cases=Fdat.d[,1])
   NewData2 = as.data.frame(NewData1)
-  
+
   London_cases<-NewData2
-  
+
 }
 
 
@@ -70,7 +70,7 @@ for (names in c("London")) {
 load("TSIR_SRA.rda")
 names(London_SRA)<- c("time","b1","Z")
 Covar = cbind(London_cases,London_SRA)
-Covar$Tcases = Covar$cases*Covar$b1 
+Covar$Tcases = Covar$cases*Covar$b1
 Covar = Covar[,-c(1,2)]
 Covar$birth = Fdat.d[,2]
 
@@ -103,7 +103,7 @@ toEst <- Csnippet("
                   TB24 = log(B24);
                   TB25 = log(B25);
                   TB26 = log(B26);
-                  
+
                   Talpha = logit(alpha);
                   TSbar = log(Sbar);
                   ")
@@ -136,8 +136,8 @@ fromEst <- Csnippet("
                     TB24 = exp(B24);
                     TB25 = exp(B25);
                     TB26 = exp(B26);
-                    
-                    
+
+
                     Talpha = expit(alpha);
                     TSbar = exp(Sbar);
                     ")
@@ -150,14 +150,14 @@ initlz <- Csnippet("
 
 stochStep <- Csnippet("
                       double B;
-                      
+
                       #define max(x, y) (((x) > (y)) ? (x) : (y))
                       #define min(x, y) (((x) < (y)) ? (x) : (y))
-                      
+
                       // By-week time  seasonality
                       int  tstar = (t - 1944)*26.01786;
-                      
-                      
+
+
                       if (tstar  % 26 == 1)
                       B = B1;
                       else if (tstar  % 26 == 2)
@@ -208,15 +208,15 @@ stochStep <- Csnippet("
                       B = B24;
                       else if (tstar  % 26 == 25)
                       B = B25;
-                      else  
+                      else
                       B = B26;
-                      
-                      
+
+
                       theta = rpois(m);
                       lambda = min( Sbar + Z,  B*(Sbar + Z)*pow(Tcases + theta,alpha));  // working great lambda was I
-                      
-                      
-                      I = rnbinom_mu( I, lambda);                   
+
+
+                      I = rnbinom_mu( I, lambda);
                       ")
 
 
@@ -306,13 +306,4 @@ TSIR %>%
   geom_ribbon(alpha=0.2)+ theme_bw() + ylab("cases") + ggtitle("TSIR cases with Data")
 
 
-##########################################################################################
-
-# params = c(m=1, B1 = 2.695622e-06, B2 = 2.695622e-06, B3 = 2.695622e-06, B4 = 2.695622e-06, B5 = 2.695622e-06, B6 = 2.695622e-06,
-#            B7 = 2.695622e-06, B8 = 2.695622e-06, B9 = 2.695622e-06, B10 = 2.695622e-06,
-#            B11 = 2.695622e-06, B12 = 2.695622e-06, B13 = 2.695622e-06, B14 = 2.695622e-06, B15 = 2.695622e-06, B16 = 2.695622e-06,
-#            B17 = 2.695622e-06, B18 = 2.695622e-06, B19 = 2.695622e-06, B20 =2.695622e-06,
-#            B21 = 2.695622e-06, B22 = 2.695622e-06, B23 = 2.695622e-06, B24 = 2.695622e-06, B25 = 2.695622e-06, B26 = 2.695622e-06,
-#            alpha = 1 , Sbar = 481608)
-
-
+##########################################################################################'
