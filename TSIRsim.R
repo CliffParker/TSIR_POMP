@@ -12,7 +12,7 @@ stopifnot(packageVersion("pomp")>="1.4.8")
 
 Biweekly=function(Data){
   n=nrow(Data)/2
-  m=ncol(Data) 
+  m=ncol(Data)
   mat = matrix( ,n,m)
   for (i in 0:n - 1 ){
     mat[i + 1,]= rep(0, m)
@@ -32,7 +32,7 @@ Cumulative = function(Data){
   for (i in 2:n){
     Dta[i,] = Dta[i-1,] + Data[i,]
   }
-  
+
   return(Dta)
 }
 
@@ -44,23 +44,23 @@ measles$town = factor(measles$town)
 "Creating Bi-weekly incidence data"
 for (names in c("London")) {
   tmp <- subset(measles, town == names)
-  tmp %>% 
+  tmp %>%
     dcast(date~"cases", fun.aggregate = sum) %>%
     mutate(year=as.integer(format(date,"%Y"))) %>%
     subset(year>=1944 & year<1965) %>%
     mutate(time=(julian(date,origin=as.Date("1944-01-01")))/365.25+1944) %>%
     subset(time>1944 & time<1965, select=c(time,cases)) -> tmp
-  
+
   ##################
-  
+
   NewData<- as.matrix(tmp)
   Fdat = Biweekly(NewData)# Biweekly data
   Fdat.d = cbind(Fdat[1:547,2]) # Adjusting for the  delay caused by maternal immunity
   NewData1 = cbind(times=seq(from = 1944, by = 1/26.01786, length.out = 547),cases=Fdat.d[,1])
   NewData2 = as.data.frame(NewData1)
-  
-  London_cases<-NewData2
-  
+
+  London_cases1<-NewData2
+
 }
 
 
@@ -70,7 +70,7 @@ for (names in c("London")) {
 load("TSIR_SRA.rda")
 names(London_SRA)<- c("time","b1","Z")
 Covar = cbind(London_cases,London_SRA)
-Covar$Tcases = Covar$cases*Covar$b1 
+Covar$Tcases = Covar$cases*Covar$b1
 Covar = Covar[,-c(1,2)]
 Covar$birth = Fdat.d[,2]
 
@@ -103,7 +103,7 @@ toEsts <- Csnippet("
                   TB24 = log(B24);
                   TB25 = log(B25);
                   TB26 = log(B26);
-                  
+
                  // Ttheta0 = log(theta0);
                   TSbar = log(Sbar);
                   ")
@@ -136,8 +136,8 @@ fromEsts <- Csnippet("
                     TB24 = exp(B24);
                     TB25 = exp(B25);
                     TB26 = exp(B26);
-                    
-                    
+
+
                     //Ttheta0 = exp(theta0);
                     TSbar = exp(Sbar);
                     ")
@@ -162,14 +162,14 @@ stochStepF <- Csnippet("
                        va = 0.4  + 0.4 * (t-1968)/10;
                        else
                        va = 0.8;
-                       
-                       
+
+
                        // By-week time  seasonality
                        int  tstar = (t - 1944)*26.01786;
-                       
-                      
-                     
-                       
+
+
+
+
                        if (tstar  % 26 == 1)
                        B = B1;
                        else if (tstar  % 26 == 2)
@@ -220,28 +220,28 @@ stochStepF <- Csnippet("
                        B = B24;
                        else if (tstar  % 26 == 25)
                        B = B25;
-                       else  
+                       else
                        B = B26;
-                       
+
                        double sd = 628.4102;// 50% dynamical noise
                        theta = rpois(m);
                        noise = rnorm(0,sd);
 
                        lambda = min(S,  B * (S) * pow(I + theta,alpha) );  // working great lambda was I
 
-                       
-                      
-                       
-                      
-                       
-                       I = rnbinom_mu( I +1e-10, lambda);   // first arg should be 1/I   
-                        
+
+
+
+
+
+                       I = rnbinom_mu( I +1e-10, lambda);   // tol added
+
                        S = max( S + birth*(1-va) - I + noise ,0);
 
 
                        ")
 #' data should include birth
-#' S is a state 
+#' S is a state
 #' noise is a state
 #' parameter Sbar theta0
 
@@ -271,7 +271,7 @@ rmeass <- Csnippet("
                   ")
 
 
-pomp(London_cases,times="times",t0=1944,
+pomp(London_cases,times="time",t0=1944,
      rprocess=discrete.time.sim(step.fun=stochStepF,delta.t=1/26.01786),
      paramnames=c("m","B1","B2","B3","B4","B5","B6","B7","B8","B9","B10","B11",
                   "B12","B13","B14","B15","B16","B17","B18","B19","B20","B21",
@@ -328,15 +328,10 @@ TSIRsim %>%
   mutate(data=sim=="data") ->dta
 #
   dta %>%
-  subset(sim!="data") %>% 
+  subset(sim!="data") %>%
   ddply( .(time), summarize, sim = "mean", cases=mean(cases), data = "mean") %>%
   rbind(dta)->dta
-  
-ggplot(subset(dta,data !=FALSE), mapping=aes(x=time, y=cases, color=data)) + 
-    geom_line() + ggtitle("TSIR mean cases with data") + 
-    xlab("time") + ylab("cases") + theme_bw() 
 
-
-
-
-
+ggplot(subset(dta,data !=FALSE), mapping=aes(x=time, y=cases, color=data)) +
+    geom_line() + ggtitle("TSIR mean cases with data") +
+    xlab("time") + ylab("cases") + theme_bw()
