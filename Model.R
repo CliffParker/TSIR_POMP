@@ -110,7 +110,7 @@ Covar = Covar[,-c(1,2)]
 ###############################################################################################################'
 ###############################################################################################################'
 # Csnippet for model structure
-"POMP Parts"
+#"POMP Parts"
 toEst <- Csnippet("
                   Tm = log(m);
                   TB1 = log(B1);
@@ -260,30 +260,43 @@ stochStep <- Csnippet("
 #A overdispersed binomial mesurement is used here.
 
 dmeas <- Csnippet("
-                  double psi = 0.116;
-                  double mn = lambda/b1;
-                  double v = mn*(1.0-1/b1+psi*psi*mn);
-                  double tol = 1.0e-18;
-                  if (cases > 0.0) {
-                  lik = pnorm(cases+0.5,mn,sqrt(v)+tol,1,0)-pnorm(cases-0.5,mn,sqrt(v)+tol,1,0)+tol;
-                  } else {
-                  lik = pnorm(cases+0.5,mn,sqrt(v)+tol,1,0)+tol;
-                  }
-                  ")
+                  double rho = 1/b1;
+                  if (rho < 1) {
+                    rho = rho;
+                    } else {
+                      rho = 1;
+                    }
+
+                    double psi = 0.262;
+                    double mn = lambda*rho;
+                    double tol = 1.0e-18;
+                    double v = mn*(1.0-rho + psi*psi*mn);
+
+                    if (cases > 0.0) {
+                      lik = dnorm(cases,mn,sqrt(v)+tol,give_log);
+                      } else {
+                        lik = dnorm(0,mn,sqrt(v)+tol,give_log);
+                      }
+                      ")
 
 rmeas <- Csnippet("
-                  double psi = 0.116;
-                  double mn = lambda/b1;
-                  double v = mn*(1.0-1/b1+psi*psi*mn);
+                  double rho = 1/b1;
+                  if (rho < 1) {
+                    rho = rho;
+                    } else {
+                      rho = 1;
+                    }
+
+                  double psi = 0.262;
+                  double mn = lambda*rho;
                   double tol = 1.0e-18;
+                  double v = mn*(1.0-rho + psi*psi*mn);
                   cases = rnorm(mn,sqrt(v)+tol);
                   if (cases > 0.0) {
-                  cases = nearbyint(cases);
-                  } else {
-                  cases = 0.0;
-                  }
+                    cases = nearbyint(cases);
+                    } else {
+                    cases = 0.0;}
                   ")
-
 
 #################################################################################################'
 #################################################################################################'
@@ -299,8 +312,9 @@ rmeas <- Csnippet("
 #################################################################################################'
 stew(file="TSIR_pomp_results.rda",{
 
-  registerDoParallel()
-  #####################################################################################################'
+  z=detectCores()
+  registerDoParallel(cores=z)
+  -----------------------------------------------------------------------------------#####
 
   name<-names <-c("London")
   for (name in names) {
@@ -337,15 +351,30 @@ stew(file="TSIR_pomp_results.rda",{
 ####################################################'
 
     #first fit with larger sd's of rw
-    firstFit <- mif2(TSIR, Nmif = 150, Np = 1000, #10 was 10000
+    firstFit <- mif2(TSIR, Nmif = 70, Np = 1000, #10 was 10000
                      rw.sd = rw.sd(
-                       m=0.03, alpha=0.03, Sbar=0.03,
-                       B1 = .10, B2 = .10, B3 = .10, B4 = .10, B5 = .10, B6 = .10, B7 = .10, B8 = .10, B9 = .10, B10 = .10,
-                       B11 = .10, B12 = .10, B13 = .10, B14 = .10, B15 = .10, B16 = .10, B17 = .10, B18 = .10, B19 = .10, B20 = .10,
-                       B21 = .10, B22 = .10, B23 = .10, B24 = .10, B25 = .10, B26 = .10),
+                     Sbar=0.03),
                      transform = T,
                      cooling.type = "geometric", cooling.fraction.50 = .05,
                      tol = 1e-17, max.fail = Inf, verbose = getOption("verbose"))
+
+    secondFit <- continue(firstFit, Nmif = 100, Np = 1000, #10 was 10000
+                      rw.sd = rw.sd(
+                      alpha=0.03,
+                      B1 = .10, B2 = .10, B3 = .10, B4 = .10, B5 = .10, B6 = .10, B7 = .10, B8 = .10, B9 = .10, B10 = .10,
+                      B11 = .10, B12 = .10, B13 = .10, B14 = .10, B15 = .10, B16 = .10, B17 = .10, B18 = .10, B19 = .10, B20 = .10,
+                      B21 = .10, B22 = .10, B23 = .10, B24 = .10, B25 = .10, B26 = .10),
+                      transform = T,
+                      cooling.type = "geometric", cooling.fraction.50 = .05,
+                      tol = 1e-17, max.fail = Inf, verbose = getOption("verbose"))
+
+     Fit <- continue(secondFit, Nmif = 70, Np = 1000, #10 was 10000
+                      rw.sd = rw.sd(
+                      m=0.03),
+                      transform = T,
+                      cooling.type = "geometric", cooling.fraction.50 = .05,
+                      tol = 1e-17, max.fail = Inf, verbose = getOption("verbose"))
+
 
 
 
@@ -489,5 +518,118 @@ stew(file="TSIR_pomp_results.rda",{
   #
 
 })
-################################################################################################'
-#################################################################################################'
+"######################################################################################"
+----------------------------------------------------------------------------------------
+"%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+########################################################################################'
+----------------------------------------------------------------------------------------
+"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+########################################################################################'
+
+plot(m,type="l")
+loglik.normal <- function (psi) {
+  parest <- coef(TSIR)
+  parest[30]<-psi
+  x <- simulate(TSIR,params=parest, as = T)
+  rho<-  1/x$b1
+  rho[rho>1]<-1
+  tol = 1.0e-18
+  m = x$cases
+  v= m*(1-rho + psi*psi*m)
+  sum(suppressWarnings(dnorm(x=obs(TSIR),mean=m,
+            sd=sqrt(v)+tol,log=TRUE)))
+}
+
+f3 <- function (b) {
+  loglik.normal(b)
+}
+
+f4 <- function () {
+  b <- seq(0, 5, .002)
+  ll <- sapply(b,f3)
+  b.hat <- b[which.max(ll)]
+  b.hat
+}
+
+f5 <- function(n) {
+  r <- replicate(n,{f4()})
+  mean(r)
+}
+
+f5(10)
+
+f3(.262)
+
+plot(TSIR)
+
+plot(x$cases,type= "l")
+
+
+length(b)
+
+
+plot(b,ll,type='l',ylab=expression(log(L)))
+"######################################################################################"
+----------------------------------------------------------------------------------------
+"%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+########################################################################################'
+----------------------------------------------------------------------------------------
+"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+########################################################################################'
+plot(simulate(TSIR))
+firstFit <- mif2(TSIR, Nmif = 150, Np = 1000, #10 was 10000
+                 rw.sd = rw.sd(
+                   m=0.03, alpha=0.03, Sbar=0.03,
+                   B1 = .10, B2 = .10, B3 = .10, B4 = .10, B5 = .10, B6 = .10, B7 = .10, B8 = .10, B9 = .10, B10 = .10,
+                   B11 = .10, B12 = .10, B13 = .10, B14 = .10, B15 = .10, B16 = .10, B17 = .10, B18 = .10, B19 = .10, B20 = .10,
+                   B21 = .10, B22 = .10, B23 = .10, B24 = .10, B25 = .10, B26 = .10),
+                 transform = T,
+                 cooling.type = "geometric", cooling.fraction.50 = .05,
+                 tol = 1e-17, max.fail = Inf, verbose = getOption("verbose"))
+
+coef(TSIR)<-coef(firstFit)
+
+TSIR %>%
+  simulate(params=coef(TSIR),nsim=5,as.data.frame=TRUE,include.data=TRUE) %>%
+  ggplot(aes(x=time,y=cases,group=sim,color=(sim=="data")))+
+  guides(color=FALSE)+
+  geom_line()+facet_wrap(~sim,ncol=2)+ ggtitle("TSIR Cases Reconstruction")+theme_bw()
+
+
+TSIR %>%
+  simulate(params=coef(TSIR),nsim=100,as.data.frame=TRUE,include.data=TRUE) %>%
+  subset(select=c(time,sim,cases)) %>%
+  mutate(data=sim=="data") %>%
+  ddply(~time+data,summarize,
+        p=c(0.05,0.5,0.95),q=quantile(cases,prob=p,names=FALSE)) %>%
+  mutate(p=mapvalues(p,from=c(0.05,0.5,0.95),to=c("lo","med","hi")),
+         data=mapvalues(data,from=c(TRUE,FALSE),to=c("data","simulation"))) %>%
+  dcast(time+data~p,value.var='q') %>%
+  ggplot(aes(x=time,y=med,color=data,fill=data,ymin=lo,ymax=hi))+
+  geom_ribbon(alpha=0.2)+ theme_bw() + ylab("cases") + ggtitle("TSIR  reconstructed cases variability with Data")
+
+
+##########################################################################################
+"Mean Plotting"
+TSIR %>%
+  simulate(params=coef(TSIR),nsim=100,as.data.frame=TRUE,include.data=TRUE) %>%
+  subset(select=c(time,sim,cases)) %>%
+  mutate(data=sim=="data") ->dta
+#
+dta %>%
+  subset(sim!="data") %>%
+  ddply( .(time), summarize, sim = "mean", cases=mean(cases), data = "mean") %>%
+  rbind(dta)->dta
+
+ggplot(subset(dta,data !=FALSE), mapping=aes(x=time, y=cases, color=data, linetype = data)) +
+  geom_line() + ggtitle("TSIR reconstructed mean cases with data") +
+  xlab("time") + ylab("cases") + theme_bw()
+"######################################################################################"
+----------------------------------------------------------------------------------------
+"%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+########################################################################################'
+----------------------------------------------------------------------------------------
+"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+########################################################################################'
+
+        
